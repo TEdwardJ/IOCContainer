@@ -116,15 +116,14 @@ public class ClassPathApplicationContext implements ApplicationContext {
 
         Class superClazz = o.getClass();
         Field declaredField=null;
-        while(declaredField == null && superClazz != Object.class){
+        while(declaredField == null){
             try {
                 declaredField = superClazz.getDeclaredField(propertyEntry.getKey());
             }catch(NoSuchFieldException e){
                 superClazz = superClazz.getSuperclass();
+                if (superClazz == Object.class)
+                    throw new NoSuchFieldException();
             }
-        }
-        if (declaredField == null){
-            throw new NoSuchFieldException();
         }
         String value = propertyEntry.getValue();
         declaredField.setAccessible(true);
