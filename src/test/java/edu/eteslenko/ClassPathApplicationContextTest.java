@@ -14,7 +14,6 @@ public class ClassPathApplicationContextTest {
     @Before
     public void init(){
         context = new ClassPathApplicationContext("configuration.xml");
-        ((ClassPathApplicationContext) context).init();
     }
 
     @Test

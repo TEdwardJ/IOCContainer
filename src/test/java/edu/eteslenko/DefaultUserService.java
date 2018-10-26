@@ -3,7 +3,7 @@ package edu.eteslenko;
 public class DefaultUserService {
 
     private String suffix;
-    private JdbcUserDao jdbcUserDao;
+    private JdbcUserDao userDao;
 
     public String getSuffix() {
         return suffix;
@@ -14,10 +14,10 @@ public class DefaultUserService {
     }
 
     public JdbcUserDao getUserDao() {
-        return jdbcUserDao;
+        return userDao;
     }
 
     public void setUserDao(JdbcUserDao userDao) {
-        this.jdbcUserDao = userDao;
+        this.userDao = userDao;
     }
 }

@@ -4,6 +4,8 @@ import edu.eteslenko.entity.Bean;
 import edu.eteslenko.entity.BeanDefinition;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -16,27 +18,38 @@ public class ClassPathApplicationContext implements ApplicationContext {
     BeanDefinitionReader reader;
     List<Bean> beanList = new ArrayList<>();
     List<BeanDefinition> beanDefList = new ArrayList<>();
+    Map<BeanDefinition,Bean> beanMapping = new HashMap<>();
 
     Function<Class, Predicate<Bean>> byClass = c -> bb -> bb.getValue().getClass() == c;
     Function<String, Predicate<Bean>> byId = s -> bb -> bb.getId().equals(s);
     BiFunction<String, Class, Predicate<Bean>> byIdAndClass = (s, c) -> bb -> bb.getId().equals(s) && bb.getValue().getClass() == c;
 
     public ClassPathApplicationContext(String path) {
-        reader =  new XMLBeanDefinitionReader(path);
+        reader = new XMLBeanDefinitionReader(path);
+        init();
     }
 
     public void init() {
         beanDefList = reader.getBeanDefinitions();
         for (BeanDefinition beanDefinition : beanDefList) {
-            beanList.add(constructBean(beanDefinition));
+            Bean bean = constructBean(beanDefinition);
+            beanList.add(bean);
+            beanMapping.put(beanDefinition,bean);
         }
-
+        for (BeanDefinition beanDef : beanDefList) {
+            try {
+                Bean bean = beanMapping.get(beanDef);
+                injectValueDependency(bean.getValue(),beanDef);
+            } catch (NoSuchFieldException e) {
+                e.printStackTrace();
+            }
+        }
         for (BeanDefinition beanDefinition : beanDefList) {
             try {
                 injectRefDependency(beanDefinition);
-            } catch (NoSuchFieldException e) {
+            }catch (IllegalAccessException e) {
                 e.printStackTrace();
-            } catch (IllegalAccessException e) {
+            } catch (InvocationTargetException e) {
                 e.printStackTrace();
             }
         }
@@ -76,18 +89,24 @@ public class ClassPathApplicationContext implements ApplicationContext {
         }
     }
 
-    private void injectRefDependency(BeanDefinition beanDefinition) throws NoSuchFieldException, IllegalAccessException {
+    private void injectRefDependency(BeanDefinition beanDefinition) throws IllegalAccessException, InvocationTargetException {
         Object o = getBean(beanDefinition.getId());
         for (Map.Entry<String, String> beanEntry : beanDefinition.getRefDependencyList().entrySet()) {
-            setFieldRef(o, beanEntry);
+            setFieldRefBySetter(o, beanEntry);
+            //setFieldRef(o, beanEntry);
         }
     }
 
-    private void setFieldRef(Object o, Map.Entry<String, String> beanEntry) throws IllegalAccessException, NoSuchFieldException {
-        Field declaredField = o.getClass().getDeclaredField(beanEntry.getKey());
+    private void setFieldRef(Object o, Map.Entry<String, String> propertyEntry) throws IllegalAccessException, NoSuchFieldException {
+        Field declaredField = getField(o, propertyEntry.getKey());//o.getClass().getDeclaredField(beanEntry.getKey());
         declaredField.setAccessible(true);
-        declaredField.set(o, getBean(beanEntry.getValue()));
+        declaredField.set(o, getBean(propertyEntry.getValue()));
         declaredField.setAccessible(false);
+    }
+
+    private void setFieldRefBySetter(Object o, Map.Entry<String, String> propertyEntry) throws InvocationTargetException, IllegalAccessException {
+        Method declaredMethod = getSetter(o, propertyEntry.getKey());
+        declaredMethod.invoke(o,getBean(propertyEntry.getValue()));
     }
 
     private Bean constructBean(BeanDefinition beanDefinition) {
@@ -95,36 +114,58 @@ public class ClassPathApplicationContext implements ApplicationContext {
         bean.setId(beanDefinition.getId());
         try {
             Class cx = Class.forName(beanDefinition.getClassName());
-            Object constructedObject = cx.newInstance();
-            injectValueDependency(constructedObject, beanDefinition);
-            bean.setValue(constructedObject);
-
+            Object instance = cx.newInstance();
+            bean.setValue(instance);
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
         } catch (IllegalAccessException e) {
             e.printStackTrace();
         } catch (InstantiationException e) {
             e.printStackTrace();
-        } catch (NoSuchFieldException e) {
-            e.printStackTrace();
         }
         return bean;
     }
 
 
-    private void setFieldValue(Object o, Map.Entry<String, String> propertyEntry/*Field declaredField, String value*/) throws NoSuchFieldException {
-
+    private Field getField(Object o, String fieldName) {
         Class superClazz = o.getClass();
-        Field declaredField=null;
-        while(declaredField == null){
-            try {
-                declaredField = superClazz.getDeclaredField(propertyEntry.getKey());
-            }catch(NoSuchFieldException e){
-                superClazz = superClazz.getSuperclass();
-                if (superClazz == Object.class)
-                    throw new NoSuchFieldException();
+        Field declaredField = null;
+        while (declaredField == null) {
+            declaredField = Arrays
+                    .stream(superClazz.getDeclaredFields())
+                    .filter(t -> t.getName().equals(fieldName))
+                    .findFirst()
+                    .orElse(null);
+            superClazz = superClazz.getSuperclass();
+            if(superClazz == Object.class){
+                return declaredField;
             }
         }
+        return declaredField;
+    }
+
+    private Method getSetter(Object o, String fieldName) {
+        Class superClazz = o.getClass();
+        Method declaredMethod = null;
+        String setterPattern = "set"+fieldName.substring(0,1).toUpperCase()+fieldName.substring(1);
+        while (declaredMethod == null) {
+            declaredMethod = Arrays
+                    .stream(superClazz.getDeclaredMethods())
+                    .filter(t->t.getReturnType().equals(void.class))
+                    .filter(t -> t.getName().matches(setterPattern))
+                    .findFirst()
+                    .orElse(null);
+            superClazz = superClazz.getSuperclass();
+            if(superClazz == Object.class){
+                return declaredMethod;
+            }
+        }
+        return declaredMethod;
+    }
+
+    private void setFieldValue(Object o, Map.Entry<String, String> propertyEntry) throws NoSuchFieldException {
+
+        Field declaredField = getField(o, propertyEntry.getKey());
         String value = propertyEntry.getValue();
         declaredField.setAccessible(true);
         Class fieldClass = declaredField.getType();
@@ -132,13 +173,13 @@ public class ClassPathApplicationContext implements ApplicationContext {
             if (fieldClass.equals(int.class)) {
                 declaredField.set(o, Integer.valueOf(value));
             } else if (fieldClass.equals(double.class)) {
-                declaredField.set(o, Double.valueOf(value));
+                declaredField.setDouble(o, Double.parseDouble(value));
             } else if (fieldClass.equals(long.class)) {
-                declaredField.set(o, Long.valueOf(value));
+                declaredField.setLong(o, Long.parseLong(value));
             } else if (fieldClass.equals(float.class)) {
-                declaredField.set(o, Float.valueOf(value));
+                declaredField.setFloat(o, Float.parseFloat(value));
             } else if (fieldClass.equals(boolean.class)) {
-                declaredField.set(o, false);
+                declaredField.setBoolean(o, false);
             } else if (isCharSequence(fieldClass)) {
                 declaredField.set(o, value);
             } else {

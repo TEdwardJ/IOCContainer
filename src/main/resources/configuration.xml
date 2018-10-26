@@ -5,6 +5,6 @@
     </bean>
         <bean id="userService" class="edu.eteslenko.DefaultUserService">
         <property name="suffix" value="value_suffix"/>
-        <property name="jdbcUserDao" ref="userDao"/>
+        <property name="userDao" ref="userDao"/>
     </bean>
 </beans>

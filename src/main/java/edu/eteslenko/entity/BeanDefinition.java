@@ -40,4 +40,14 @@ public class BeanDefinition {
     public void setRefDependencyList(Map<String, String> refDependencyList) {
         this.refDependencyList = refDependencyList;
     }
+
+    @Override
+    public String toString() {
+        return "BeanDefinition{" +
+                "id='" + id + '\'' +
+                ", className='" + className + '\'' +
+                ", valueDependencyList=" + valueDependencyList +
+                ", refDependencyList=" + refDependencyList +
+                '}';
+    }
 }
