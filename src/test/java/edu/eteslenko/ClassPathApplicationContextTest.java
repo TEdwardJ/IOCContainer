@@ -10,7 +10,7 @@ import java.util.Arrays;
 import static org.junit.Assert.*;
 
 public class ClassPathApplicationContextTest {
-  ApplicationContext context;
+  private ApplicationContext context;
     @Before
     public void init(){
         context = new ClassPathApplicationContext("configuration.xml");

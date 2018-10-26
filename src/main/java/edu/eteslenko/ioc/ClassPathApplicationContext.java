@@ -113,7 +113,19 @@ public class ClassPathApplicationContext implements ApplicationContext {
 
 
     private void setFieldValue(Object o, Map.Entry<String, String> propertyEntry/*Field declaredField, String value*/) throws NoSuchFieldException {
-        Field declaredField = o.getClass().getDeclaredField(propertyEntry.getKey());
+
+        Class superClazz = o.getClass();
+        Field declaredField=null;
+        while(declaredField == null && superClazz != Object.class){
+            try {
+                declaredField = superClazz.getDeclaredField(propertyEntry.getKey());
+            }catch(NoSuchFieldException e){
+                superClazz = superClazz.getSuperclass();
+            }
+        }
+        if (declaredField == null){
+            throw new NoSuchFieldException();
+        }
         String value = propertyEntry.getValue();
         declaredField.setAccessible(true);
         Class fieldClass = declaredField.getType();
