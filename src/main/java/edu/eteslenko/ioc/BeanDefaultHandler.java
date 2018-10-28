@@ -22,9 +22,6 @@ public class BeanDefaultHandler extends DefaultHandler {
     public void startElement(String uri, String localName, String qName,
                              Attributes attributes) throws SAXException {
 
-        if (qName.equalsIgnoreCase("Beans")) {
-        }
-
         if (qName.equalsIgnoreCase("Bean")) {
             beanDefinition = new BeanDefinition();
             getTagAttributes(attributes);
@@ -64,10 +61,6 @@ public class BeanDefaultHandler extends DefaultHandler {
         if (qName.equalsIgnoreCase("Beans")) {
             attributesMap.clear();
         }
-    }
-
-    public void characters(char ch[], int start, int length) throws SAXException {
-
     }
 
     public List<BeanDefinition> getBeanDefinitionList() {

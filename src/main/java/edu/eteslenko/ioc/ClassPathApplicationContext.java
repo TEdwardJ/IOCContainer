@@ -17,7 +17,7 @@ public class ClassPathApplicationContext implements ApplicationContext {
 
     BeanDefinitionReader reader;
     List<Bean> beanList = new ArrayList<>();
-    List<BeanDefinition> beanDefList = new ArrayList<>();
+    List<BeanDefinition> beanDefinitionList;
     Map<BeanDefinition,Bean> beanMapping = new HashMap<>();
 
     Function<Class, Predicate<Bean>> byClass = c -> bb -> bb.getValue().getClass() == c;
@@ -30,13 +30,13 @@ public class ClassPathApplicationContext implements ApplicationContext {
     }
 
     public void init() {
-        beanDefList = reader.getBeanDefinitions();
-        for (BeanDefinition beanDefinition : beanDefList) {
+        beanDefinitionList = reader.getBeanDefinitions();
+        for (BeanDefinition beanDefinition : beanDefinitionList) {
             Bean bean = constructBean(beanDefinition);
             beanList.add(bean);
             beanMapping.put(beanDefinition,bean);
         }
-        for (BeanDefinition beanDef : beanDefList) {
+        for (BeanDefinition beanDef : beanDefinitionList) {
             try {
                 Bean bean = beanMapping.get(beanDef);
                 injectValueDependency(bean.getValue(),beanDef);
@@ -44,12 +44,10 @@ public class ClassPathApplicationContext implements ApplicationContext {
                 e.printStackTrace();
             }
         }
-        for (BeanDefinition beanDefinition : beanDefList) {
+        for (BeanDefinition beanDefinition : beanDefinitionList) {
             try {
                 injectRefDependency(beanDefinition);
-            }catch (IllegalAccessException e) {
-                e.printStackTrace();
-            } catch (InvocationTargetException e) {
+            }catch (Exception e) {
                 e.printStackTrace();
             }
         }
@@ -113,14 +111,10 @@ public class ClassPathApplicationContext implements ApplicationContext {
         Bean bean = new Bean();
         bean.setId(beanDefinition.getId());
         try {
-            Class cx = Class.forName(beanDefinition.getClassName());
-            Object instance = cx.newInstance();
+            Class clazz = Class.forName(beanDefinition.getClassName());
+            Object instance = clazz.newInstance();
             bean.setValue(instance);
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        } catch (InstantiationException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
         return bean;
@@ -170,15 +164,15 @@ public class ClassPathApplicationContext implements ApplicationContext {
         declaredField.setAccessible(true);
         Class fieldClass = declaredField.getType();
         try {
-            if (fieldClass.equals(int.class)) {
+            if (fieldClass == int.class) {
                 declaredField.set(o, Integer.valueOf(value));
-            } else if (fieldClass.equals(double.class)) {
+            } else if (fieldClass == double.class) {
                 declaredField.setDouble(o, Double.parseDouble(value));
-            } else if (fieldClass.equals(long.class)) {
+            } else if (fieldClass == long.class) {
                 declaredField.setLong(o, Long.parseLong(value));
-            } else if (fieldClass.equals(float.class)) {
+            } else if (fieldClass  == float.class) {
                 declaredField.setFloat(o, Float.parseFloat(value));
-            } else if (fieldClass.equals(boolean.class)) {
+            } else if (fieldClass == boolean.class) {
                 declaredField.setBoolean(o, false);
             } else if (isCharSequence(fieldClass)) {
                 declaredField.set(o, value);
