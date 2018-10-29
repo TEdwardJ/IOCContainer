@@ -57,6 +57,6 @@ public class ClassPathAppicationContextWithFactoriesTest {
 
     @Test
     public void getBeanNames() {
-        assertEquals(Arrays.asList("beanFactoryPostProcessor","userService","userDao"),context.getBeanNames());
+        assertEquals(Arrays.asList("beanFactoryPostProcessor","userDao","personTest", "beanPostProcessor","userService"),context.getBeanNames());
     }
 }

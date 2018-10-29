@@ -23,9 +23,7 @@ public class ClassPathApplicationContext implements ApplicationContext {
     private List<BeanDefinition> ordinaryBeanList = new ArrayList<>();
     private Map<BeanDefinition, Bean> totalBeanMapping = new HashMap<>();
 
-    Function<Class, Predicate<Bean>> byClass = c -> bb -> bb.getValue().getClass() == c;
 
-    BiFunction<String, Class, Predicate<Bean>> byIdAndClass = (s, c) -> bb -> bb.getId().equals(s) && bb.getValue().getClass() == c;
 
     public ClassPathApplicationContext(String path) {
         reader = new XMLBeanDefinitionReader(path);
@@ -199,7 +197,7 @@ public class ClassPathApplicationContext implements ApplicationContext {
 
     @Override
     public <T> T getBean(Class<T> t) {
-        return (T) getBean(byClass.apply(t));
+        return (T) getBean(b -> b.getValue().getClass() == t);
     }
 
     @Override
@@ -209,7 +207,7 @@ public class ClassPathApplicationContext implements ApplicationContext {
 
     @Override
     public <T> T getBean(String id, Class<T> clazz) {
-        return (T) getBean(byIdAndClass.apply(id, clazz));
+        return (T) getBean(bb -> bb.getId().equals(id) && bb.getValue().getClass() == clazz);
     }
 
     @Override
