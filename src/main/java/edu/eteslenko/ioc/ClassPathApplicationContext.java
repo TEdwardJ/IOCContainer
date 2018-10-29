@@ -180,7 +180,7 @@ public class ClassPathApplicationContext implements ApplicationContext {
             BeanPostProcessor postProcessor = (BeanPostProcessor) totalBeanMapping.get(beanPostProcessor).getValue();
             for (BeanDefinition beanDefinition : ordinaryBeanList) {
                 Bean bean = totalBeanMapping.get(beanDefinition);
-                bean.setValue(postProcessor.postProcessBeforeInitialization(bean.getValue(), bean.getId()));
+                bean.setValue(postProcessor.postProcessAfterInitialization(bean.getValue(), bean.getId()));
                 totalBeanMapping.put(beanDefinition, bean);
             }
         }
@@ -291,10 +291,10 @@ public class ClassPathApplicationContext implements ApplicationContext {
     private List<Method> getPostConstructMethods(Object o) {
         Class superClazz = o.getClass();
         List<Method> declaredMethod = null;
-        while (declaredMethod ==null) {
+        while (declaredMethod == null) {
             declaredMethod = Arrays
                     .stream(superClazz.getDeclaredMethods())
-                    .filter(t -> t.getClass().isAnnotationPresent(PostConstruct.class))
+                    .filter(t -> t.isAnnotationPresent(PostConstruct.class))
                     .collect(Collectors.toList());
             superClazz = superClazz.getSuperclass();
             if (superClazz == Object.class) {

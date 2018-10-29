@@ -22,7 +22,7 @@ public class ClassPathAppicationContextWithFactoriesTest {
     @Test
     public void postProcessorTest(){
         Person person = (Person)context.getBean("personTest");
-        assertEquals(33,person.getAge());
+        assertEquals(45,person.getAge());
     }
     @Test
     public void getBeanByClass() {
