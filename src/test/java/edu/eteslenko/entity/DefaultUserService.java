@@ -1,4 +1,4 @@
-package edu.eteslenko;
+package edu.eteslenko.entity;
 
 public class DefaultUserService {
 

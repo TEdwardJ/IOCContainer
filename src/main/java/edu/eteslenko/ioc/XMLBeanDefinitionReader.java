@@ -8,6 +8,7 @@ import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 
 public class XMLBeanDefinitionReader implements BeanDefinitionReader {
@@ -23,11 +24,11 @@ public class XMLBeanDefinitionReader implements BeanDefinitionReader {
 
     public List<BeanDefinition> getBeanDefinitions() {
         SAXParserFactory factory = SAXParserFactory.newInstance();
-        try {
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream(xmlSource)){
             SAXParser parser = factory.newSAXParser();
 
             BeanDefaultHandler beanHandler = new BeanDefaultHandler();
-            parser.parse(getClass().getClassLoader().getResourceAsStream(xmlSource),beanHandler);
+            parser.parse(is, beanHandler);
             //parser.parse(new File(xmlSource), beanHandler);
 
             return beanHandler.getBeanDefinitionList();

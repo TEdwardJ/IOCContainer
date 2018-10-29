@@ -1,8 +1,11 @@
 package edu.eteslenko.ioc;
 
+import edu.eteslenko.config.BeanFactoryPostProcessor;
+import edu.eteslenko.config.BeanPostProcessor;
 import edu.eteslenko.entity.Bean;
 import edu.eteslenko.entity.BeanDefinition;
 
+import javax.annotation.PostConstruct;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -14,14 +17,14 @@ import java.util.stream.Collectors;
 
 public class ClassPathApplicationContext implements ApplicationContext {
 
-
-    BeanDefinitionReader reader;
-    List<Bean> beanList = new ArrayList<>();
-    List<BeanDefinition> beanDefinitionList;
-    Map<BeanDefinition,Bean> beanMapping = new HashMap<>();
+    private BeanDefinitionReader reader;
+    private List<BeanDefinition> beanPostProcessorFactoryList = new ArrayList<>();
+    private List<BeanDefinition> beanPostProcessorList = new ArrayList<>();
+    private List<BeanDefinition> ordinaryBeanList = new ArrayList<>();
+    private Map<BeanDefinition, Bean> totalBeanMapping = new HashMap<>();
 
     Function<Class, Predicate<Bean>> byClass = c -> bb -> bb.getValue().getClass() == c;
-    Function<String, Predicate<Bean>> byId = s -> bb -> bb.getId().equals(s);
+
     BiFunction<String, Class, Predicate<Bean>> byIdAndClass = (s, c) -> bb -> bb.getId().equals(s) && bb.getValue().getClass() == c;
 
     public ClassPathApplicationContext(String path) {
@@ -29,32 +32,165 @@ public class ClassPathApplicationContext implements ApplicationContext {
         init();
     }
 
-    public void init() {
-        beanDefinitionList = reader.getBeanDefinitions();
-        for (BeanDefinition beanDefinition : beanDefinitionList) {
-            Bean bean = constructBean(beanDefinition);
-            beanList.add(bean);
-            beanMapping.put(beanDefinition,bean);
+    private boolean isInterfaceImplemented(Class implementation, Class interfaceClass) {
+        Class superClass = implementation;
+        while (superClass != Object.class) {
+            for (Class aClass : implementation.getInterfaces()) {
+                if (aClass == interfaceClass) {
+                    return true;
+                }
+            }
+            superClass = superClass.getSuperclass();
+            ;
         }
-        for (BeanDefinition beanDef : beanDefinitionList) {
+        return false;
+    }
+
+    private List<BeanDefinition> findSystemFactoryBeans() {
+        return getBeanDefinitionsByInterface(BeanFactoryPostProcessor.class);
+    }
+
+    private List<BeanDefinition> findPostProcessorBeans() {
+        return getBeansByInterface(BeanPostProcessor.class);
+    }
+
+    private List<BeanDefinition> getBeansByInterface(Class interfaceClass) {
+        List<BeanDefinition> beanList = new ArrayList();
+        for (BeanDefinition beanDefinition : totalBeanMapping.keySet()) {
+            Bean bean = totalBeanMapping.get(beanDefinition);
+            if (bean != null) {
+                Class beanClass = bean.getValue().getClass();
+                if (isInterfaceImplemented(beanClass, interfaceClass)) {
+                    beanList.add(beanDefinition);
+                }
+            }
+        }
+        return beanList;
+    }
+
+    private List<BeanDefinition> getBeanDefinitionsByInterface(Class interfaceClass) {
+        List<BeanDefinition> beanDefinition = new ArrayList();
+        for (BeanDefinition beanDef : totalBeanMapping.keySet()) {
             try {
-                Bean bean = beanMapping.get(beanDef);
-                injectValueDependency(bean.getValue(),beanDef);
-            } catch (NoSuchFieldException e) {
+                Class beanClass = Class.forName(beanDef.getClassName());
+                if (isInterfaceImplemented(beanClass, interfaceClass)) {
+                    beanDefinition.add(beanDef);
+                }
+            } catch (ClassNotFoundException e) {
                 e.printStackTrace();
             }
         }
+        return beanDefinition;
+    }
+
+
+    public void init() {
+        List<BeanDefinition> beanDefinitionList = reader.getBeanDefinitions();
         for (BeanDefinition beanDefinition : beanDefinitionList) {
+            totalBeanMapping.put(beanDefinition, null);
+        }
+
+        beanPostProcessorFactoryList.addAll(findSystemFactoryBeans());
+
+        constructBeans(beanPostProcessorFactoryList);
+        configureWithBeanPostProcessorFactory();
+        beanDefinitionList.removeAll(beanPostProcessorFactoryList);
+        ordinaryBeanList.addAll(beanDefinitionList);
+
+        constructBeans(ordinaryBeanList);
+
+        beanPostProcessorList.addAll(findPostProcessorBeans());
+
+        configureWithBeanPostProcessorBefore();
+        postConstructConfiguration();
+        configureWithBeanPostProcessorAfter();
+    }
+
+    private void postConstructConfiguration() {
+        for (BeanDefinition beanDefinition : ordinaryBeanList) {
+            Object instance = getBean(beanDefinition.getId());
+            for (Method method : getPostConstructMethods(instance)) {
+                try {
+                    method.invoke(instance);
+                } catch (IllegalAccessException e) {
+                    e.printStackTrace();
+                } catch (InvocationTargetException e) {
+                    e.printStackTrace();
+                }
+            }
+
+
+        }
+    }
+
+
+    private void injectRefDependencies(List<BeanDefinition> beanList) {
+        for (BeanDefinition beanDefinition : beanList) {
             try {
                 injectRefDependency(beanDefinition);
-            }catch (Exception e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
         }
     }
 
+    private void injectValueDependencies(List<BeanDefinition> beanList) {
+        for (BeanDefinition beanDef : beanList) {
+            try {
+                Bean bean = totalBeanMapping.get(beanDef);
+                injectValueDependency(bean.getValue(), beanDef);
+            } catch (NoSuchFieldException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void constructBeans(List<BeanDefinition> beanList) {
+        for (BeanDefinition beanDefinition : beanList) {
+            Bean bean = constructBean(beanDefinition);
+            totalBeanMapping.put(beanDefinition, bean);
+        }
+        injectValueDependencies(beanList);
+        injectRefDependencies(beanList);
+    }
+
+    private void configureWithBeanPostProcessorFactory() {
+        for (BeanDefinition beanPostProcessorFactory : beanPostProcessorFactoryList) {
+            BeanFactoryPostProcessor postProcessor = (BeanFactoryPostProcessor) totalBeanMapping.get(beanPostProcessorFactory).getValue();
+            for (BeanDefinition beanDefinition : totalBeanMapping.keySet()) {
+                postProcessor.postProcessBeanFactory(beanDefinition);
+            }
+        }
+    }
+
+    private void configureWithBeanPostProcessorBefore() {
+        for (BeanDefinition beanPostProcessor : beanPostProcessorList) {
+            BeanPostProcessor postProcessor = (BeanPostProcessor) totalBeanMapping.get(beanPostProcessor).getValue();
+            for (BeanDefinition beanDefinition : ordinaryBeanList) {
+                Bean bean = totalBeanMapping.get(beanDefinition);
+                bean.setValue( postProcessor.postProcessBeforeInitialization(bean.getValue(), bean.getId()));
+                totalBeanMapping.put(beanDefinition, bean);
+            }
+        }
+    }
+
+
+    private void configureWithBeanPostProcessorAfter() {
+        for (BeanDefinition beanPostProcessor : beanPostProcessorList) {
+            BeanPostProcessor postProcessor = (BeanPostProcessor) totalBeanMapping.get(beanPostProcessor).getValue();
+            for (BeanDefinition beanDefinition : ordinaryBeanList) {
+                Bean bean = totalBeanMapping.get(beanDefinition);
+                bean.setValue(postProcessor.postProcessBeforeInitialization(bean.getValue(), bean.getId()));
+                totalBeanMapping.put(beanDefinition, bean);
+            }
+        }
+    }
+
+
     private Object getBean(Predicate<Bean> condition) {
-        Optional bean = beanList.stream()
+        Optional bean = totalBeanMapping.values()
+                .stream()
+                .filter(t -> t != null)
                 .filter(condition)
                 .map(e -> e.getValue())
                 .findFirst();
@@ -68,7 +204,7 @@ public class ClassPathApplicationContext implements ApplicationContext {
 
     @Override
     public Object getBean(String id) {
-        return getBean(byId.apply(id));
+        return getBean(b -> b.getId().equals(id));
     }
 
     @Override
@@ -78,7 +214,9 @@ public class ClassPathApplicationContext implements ApplicationContext {
 
     @Override
     public List<String> getBeanNames() {
-        return beanList.stream().map(e -> e.getId()).collect(Collectors.toList());
+        return totalBeanMapping.values().stream()
+                .map(e -> e.getId())
+                .collect(Collectors.toList());
     }
 
     public void injectValueDependency(Object o, BeanDefinition beanDefinition) throws NoSuchFieldException {
@@ -91,20 +229,13 @@ public class ClassPathApplicationContext implements ApplicationContext {
         Object o = getBean(beanDefinition.getId());
         for (Map.Entry<String, String> beanEntry : beanDefinition.getRefDependencyList().entrySet()) {
             setFieldRefBySetter(o, beanEntry);
-            //setFieldRef(o, beanEntry);
         }
     }
 
-    private void setFieldRef(Object o, Map.Entry<String, String> propertyEntry) throws IllegalAccessException, NoSuchFieldException {
-        Field declaredField = getField(o, propertyEntry.getKey());//o.getClass().getDeclaredField(beanEntry.getKey());
-        declaredField.setAccessible(true);
-        declaredField.set(o, getBean(propertyEntry.getValue()));
-        declaredField.setAccessible(false);
-    }
 
     private void setFieldRefBySetter(Object o, Map.Entry<String, String> propertyEntry) throws InvocationTargetException, IllegalAccessException {
         Method declaredMethod = getSetter(o, propertyEntry.getKey());
-        declaredMethod.invoke(o,getBean(propertyEntry.getValue()));
+        declaredMethod.invoke(o, getBean(propertyEntry.getValue()));
     }
 
     private Bean constructBean(BeanDefinition beanDefinition) {
@@ -131,7 +262,7 @@ public class ClassPathApplicationContext implements ApplicationContext {
                     .findFirst()
                     .orElse(null);
             superClazz = superClazz.getSuperclass();
-            if(superClazz == Object.class){
+            if (superClazz == Object.class) {
                 return declaredField;
             }
         }
@@ -141,21 +272,38 @@ public class ClassPathApplicationContext implements ApplicationContext {
     private Method getSetter(Object o, String fieldName) {
         Class superClazz = o.getClass();
         Method declaredMethod = null;
-        String setterPattern = "set"+fieldName.substring(0,1).toUpperCase()+fieldName.substring(1);
+        String setterPattern = "set" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
         while (declaredMethod == null) {
             declaredMethod = Arrays
                     .stream(superClazz.getDeclaredMethods())
-                    .filter(t->t.getReturnType().equals(void.class))
+                    .filter(t -> t.getReturnType().equals(void.class))
                     .filter(t -> t.getName().matches(setterPattern))
                     .findFirst()
                     .orElse(null);
             superClazz = superClazz.getSuperclass();
-            if(superClazz == Object.class){
+            if (superClazz == Object.class) {
                 return declaredMethod;
             }
         }
         return declaredMethod;
     }
+
+    private List<Method> getPostConstructMethods(Object o) {
+        Class superClazz = o.getClass();
+        List<Method> declaredMethod = null;
+        while (declaredMethod ==null) {
+            declaredMethod = Arrays
+                    .stream(superClazz.getDeclaredMethods())
+                    .filter(t -> t.getClass().isAnnotationPresent(PostConstruct.class))
+                    .collect(Collectors.toList());
+            superClazz = superClazz.getSuperclass();
+            if (superClazz == Object.class) {
+                return declaredMethod;
+            }
+        }
+        return declaredMethod;
+    }
+
 
     private void setFieldValue(Object o, Map.Entry<String, String> propertyEntry) throws NoSuchFieldException {
 
@@ -170,7 +318,7 @@ public class ClassPathApplicationContext implements ApplicationContext {
                 declaredField.setDouble(o, Double.parseDouble(value));
             } else if (fieldClass == long.class) {
                 declaredField.setLong(o, Long.parseLong(value));
-            } else if (fieldClass  == float.class) {
+            } else if (fieldClass == float.class) {
                 declaredField.setFloat(o, Float.parseFloat(value));
             } else if (fieldClass == boolean.class) {
                 declaredField.setBoolean(o, false);

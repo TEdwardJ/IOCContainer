@@ -1,0 +1,17 @@
+<beans>
+    <bean id="userDao" class="edu.eteslenko.entity.JdbcUserDao">
+        <property name="url" value="localhost"/>
+        <property name="port" value="3000"/>
+    </bean>
+        <bean id="userService" class="edu.eteslenko.entity.DefaultUserService">
+        <property name="suffix" value="value_suffix"/>
+        <property name="userDao" ref="userDao"/>
+    </bean>
+    <bean id="beanFactoryPostProcessor" class="edu.eteslenko.BeanFactoryPostProcessorTest">
+    </bean>
+    <bean id="beanPostProcessor" class="edu.eteslenko.TestBeanPostProcessor">
+    </bean>
+    <bean id="personTest" class="edu.eteslenko.entity.Person">
+        <property name="age" value="21"/>
+    </bean>
+</beans>

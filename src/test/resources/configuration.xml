@@ -1,9 +1,9 @@
 <beans>
-    <bean id="userDao" class="edu.eteslenko.JdbcUserDao">
+    <bean id="userDao" class="edu.eteslenko.entity.JdbcUserDao">
         <property name="url" value="localhost"/>
         <property name="port" value="3000"/>
     </bean>
-        <bean id="userService" class="edu.eteslenko.DefaultUserService">
+    <bean id="userService" class="edu.eteslenko.entity.DefaultUserService">
         <property name="suffix" value="value_suffix"/>
         <property name="userDao" ref="userDao"/>
     </bean>

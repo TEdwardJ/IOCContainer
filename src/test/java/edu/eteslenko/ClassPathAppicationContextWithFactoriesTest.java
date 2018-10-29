@@ -2,6 +2,7 @@ package edu.eteslenko;
 
 import edu.eteslenko.entity.DefaultUserService;
 import edu.eteslenko.entity.JdbcUserDao;
+import edu.eteslenko.entity.Person;
 import edu.eteslenko.ioc.ApplicationContext;
 import edu.eteslenko.ioc.ClassPathApplicationContext;
 import org.junit.Before;
@@ -11,24 +12,29 @@ import java.util.Arrays;
 
 import static org.junit.Assert.*;
 
-public class ClassPathApplicationContextTest {
-  private ApplicationContext context;
+public class ClassPathAppicationContextWithFactoriesTest {
+    private ApplicationContext context;
     @Before
     public void init(){
-        context = new ClassPathApplicationContext("configuration.xml");
+        context = new ClassPathApplicationContext("configuration2.xml");
     }
 
     @Test
+    public void postProcessorTest(){
+        Person person = (Person)context.getBean("personTest");
+        assertEquals(33,person.getAge());
+    }
+    @Test
     public void getBeanByClass() {
         JdbcUserDao o = context.getBean(JdbcUserDao.class);
-        assertEquals(3000,o.getPort());
+        assertEquals(3005,o.getPort());
         assertEquals("localhost",o.getUrl());
     }
 
     @Test
     public void getBeanById() {
         JdbcUserDao o = (JdbcUserDao)context.getBean("userDao");
-        assertEquals(3000,o.getPort());
+        assertEquals(3005,o.getPort());
         assertEquals("localhost",o.getUrl());
 
         DefaultUserService defaultService = (DefaultUserService) context.getBean("userService");
@@ -39,7 +45,7 @@ public class ClassPathApplicationContextTest {
     @Test
     public void getBeanByIdAndClass() {
         JdbcUserDao o = (JdbcUserDao)context.getBean("userDao",JdbcUserDao.class);
-        assertEquals(3000,o.getPort());
+        assertEquals(3005,o.getPort());
         assertEquals("localhost",o.getUrl());
     }
 
@@ -51,6 +57,6 @@ public class ClassPathApplicationContextTest {
 
     @Test
     public void getBeanNames() {
-        assertEquals(Arrays.asList("userDao","userService"),context.getBeanNames());
+        assertEquals(Arrays.asList("beanFactoryPostProcessor","userService","userDao"),context.getBeanNames());
     }
 }
